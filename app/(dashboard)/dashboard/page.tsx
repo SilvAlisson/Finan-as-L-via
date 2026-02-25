@@ -1,0 +1,53 @@
+import { DashboardGridEditable } from "@/components/dashboard/dashboard-grid-editable";
+import { DashboardWelcome } from "@/components/dashboard/dashboard-welcome";
+import { SectionCards } from "@/components/dashboard/section-cards";
+import MonthNavigation from "@/components/month-picker/month-navigation";
+import { getUser } from "@/lib/auth/server";
+import { fetchDashboardData } from "@/lib/dashboard/fetch-dashboard-data";
+import { parsePeriodParam } from "@/lib/utils/period";
+import { fetchUserDashboardPreferences } from "./data";
+
+type PageSearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+type PageProps = {
+	searchParams?: PageSearchParams;
+};
+
+const getSingleParam = (
+	params: Record<string, string | string[] | undefined> | undefined,
+	key: string,
+) => {
+	const value = params?.[key];
+	if (!value) return null;
+	return Array.isArray(value) ? (value[0] ?? null) : value;
+};
+
+export default async function Page({ searchParams }: PageProps) {
+	const user = await getUser();
+	const resolvedSearchParams = searchParams ? await searchParams : undefined;
+	const periodoParam = getSingleParam(resolvedSearchParams, "periodo");
+	const { period: selectedPeriod } = parsePeriodParam(periodoParam);
+
+	const [data, preferences] = await Promise.all([
+		fetchDashboardData(user.id, selectedPeriod),
+		fetchUserDashboardPreferences(user.id),
+	]);
+
+	const { disableMagnetlines, dashboardWidgets } = preferences;
+
+	return (
+		<main className="flex flex-col gap-4">
+			<DashboardWelcome
+				name={user.name}
+				disableMagnetlines={disableMagnetlines}
+			/>
+			<MonthNavigation />
+			<SectionCards metrics={data.metrics} />
+			<DashboardGridEditable
+				data={data}
+				period={selectedPeriod}
+				initialPreferences={dashboardWidgets}
+			/>
+		</main>
+	);
+}
